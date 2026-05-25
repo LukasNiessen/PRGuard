@@ -1,4 +1,4 @@
 interface:
   display_name: "PRGuard"
   short_description: "Audit GitHub PR quality, review risk, and timeline artifacts."
-  default_prompt: "Audit recent GitHub pull requests for risky review patterns and generate markdown and HTML reports."
+  default_prompt: "Run the default PRGuard audit immediately using the current Git remote, 1-day lookback, docs/pr-quality-audit output, all formats, and .pr-quality-audit.md if present; print these resolved defaults before running."

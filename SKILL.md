@@ -11,6 +11,14 @@ The goal is targeted coaching, not blame. Report only practices that create real
 
 ## Workflow
 
+If the user invokes PRGuard with no text, flags, or arguments, do not ask for confirmation. Run the default audit immediately and print the resolved defaults first, for example:
+
+```text
+Using PRGuard defaults: repository=current Git remote, lookback=1 day, output=docs/pr-quality-audit, format=all, config=.pr-quality-audit.md if present.
+```
+
+Only ask a follow-up question when a required prerequisite or repository cannot be determined.
+
 1. Identify the repository.
    - Prefer the current Git repository remote.
    - If the user gives a repo, pass it explicitly as `--repo OWNER/REPO` or `--repo HOST/OWNER/REPO`.

@@ -66,6 +66,12 @@ python C:/Users/78079/Repos/Private/PRGuard/scripts/pr_quality_audit.py
 
 Default lookback is **1 day**.
 
+When PRGuard is invoked with no text, flags, or arguments, agents should run the default audit immediately and print the resolved defaults first:
+
+```text
+Using PRGuard defaults: repository=current Git remote, lookback=1 day, output=docs/pr-quality-audit, format=all, config=.pr-quality-audit.md if present.
+```
+
 Useful variants:
 
 ```bash
