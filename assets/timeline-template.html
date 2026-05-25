@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITLE}}</title>
+  <style>
+    :root {
+      --bg: #f7f7f4;
+      --ink: #202124;
+      --muted: #6b6f76;
+      --line: #d8d9d2;
+      --low: {{LOW_COLOR}};
+      --medium: {{MEDIUM_COLOR}};
+      --high: {{HIGH_COLOR}};
+      --critical: {{CRITICAL_COLOR}};
+      --panel: #fff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      padding: 28px 32px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fffdfa;
+      position: sticky;
+      top: 0;
+      z-index: 3;
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0; }
+    .meta, .legend {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .legend { gap: 12px; margin-top: 16px; font-size: 13px; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    main { padding: 28px 32px 40px; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 14px 16px;
+    }
+    .metric b { display: block; font-size: 24px; margin-bottom: 2px; }
+    .metric span { color: var(--muted); font-size: 13px; }
+    .timeline-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .timeline { min-width: 2200px; padding: 22px 24px 28px; }
+    .axis {
+      position: relative;
+      height: 36px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 12px;
+    }
+    .tick {
+      position: absolute;
+      bottom: -1px;
+      transform: translateX(-50%);
+      border-left: 1px solid var(--line);
+      height: 16px;
+      color: var(--muted);
+      font-size: 12px;
+      padding-left: 6px;
+      white-space: nowrap;
+    }
+    .bars {
+      position: relative;
+      height: 460px;
+      border-bottom: 2px solid #999b93;
+      background:
+        linear-gradient(to top, rgba(32,33,36,.06) 1px, transparent 1px) 0 0 / 100% 92px,
+        linear-gradient(to right, rgba(32,33,36,.04) 1px, transparent 1px) 0 0 / 12.5% 100%;
+    }
+    .bar {
+      position: absolute;
+      bottom: 0;
+      width: 8px;
+      min-height: 8px;
+      border-radius: 4px 4px 0 0;
+      cursor: pointer;
+      outline: none;
+      transition: transform 120ms ease, filter 120ms ease;
+    }
+    .bar:hover, .bar:focus { transform: scaleX(1.8); filter: brightness(.92); z-index: 2; }
+    .low { background: var(--low); }
+    .medium { background: var(--medium); }
+    .high { background: var(--high); }
+    .critical { background: var(--critical); }
+    .tooltip {
+      position: fixed;
+      pointer-events: none;
+      max-width: 440px;
+      background: #161719;
+      color: #fff;
+      padding: 14px 16px;
+      border-radius: 8px;
+      box-shadow: 0 14px 38px rgba(0,0,0,.28);
+      font-size: 13px;
+      line-height: 1.42;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 100ms ease, transform 100ms ease;
+      z-index: 10;
+    }
+    .tooltip.visible { opacity: 1; transform: translateY(0); }
+    .tooltip strong { display: block; font-size: 14px; margin-bottom: 6px; }
+    .tooltip ul { margin: 8px 0 0 18px; padding: 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{{TITLE}}</h1>
+    <div class="meta">
+      <span>Repository: {{REPO}}</span>
+      <span>Generated: {{GENERATED_AT}}</span>
+      <span>Only risky PRs shown</span>
+      <span>Safe routes and ignored checks omitted</span>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--low)"></i> low</span>
+      <span><i class="dot" style="background:var(--medium)"></i> medium</span>
+      <span><i class="dot" style="background:var(--high)"></i> high</span>
+      <span><i class="dot" style="background:var(--critical)"></i> critical</span>
+    </div>
+  </header>
+  <main>
+    <section class="summary" id="summary"></section>
+    <section class="timeline-wrap" aria-label="PR timeline">
+      <div class="timeline">
+        <div class="axis" id="axis"></div>
+        <div class="bars" id="bars"></div>
+      </div>
+    </section>
+  </main>
+  <div class="tooltip" id="tooltip"></div>
+  <script>
+    const prs = {{PR_DATA}};
+    const start = Date.parse("{{SINCE}}");
+    const end = Date.parse("{{UNTIL}}");
+    const bars = document.getElementById("bars");
+    const axis = document.getElementById("axis");
+    const tooltip = document.getElementById("tooltip");
+
+    function severity(score) {
+      if (score >= 15) return "critical";
+      if (score >= 10) return "high";
+      if (score >= 5) return "medium";
+      return "low";
+    }
+    function pct(date) {
+      return ((Date.parse(date) - start) / (end - start)) * 100;
+    }
+    function escapeText(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[char]));
+    }
+    function formatDate(value) {
+      return new Intl.DateTimeFormat("en-GB", {
+        dateStyle: "short", timeStyle: "short", timeZone: "UTC"
+      }).format(new Date(value)) + " UTC";
+    }
+    function moveTooltip(event) {
+      const pad = 16;
+      const rect = tooltip.getBoundingClientRect();
+      let left = event.clientX + pad;
+      let top = event.clientY + pad;
+      if (left + rect.width > window.innerWidth - pad) left = event.clientX - rect.width - pad;
+      if (top + rect.height > window.innerHeight - pad) top = event.clientY - rect.height - pad;
+      tooltip.style.left = `${Math.max(pad, left)}px`;
+      tooltip.style.top = `${Math.max(pad, top)}px`;
+    }
+    function showTooltip(pr, event) {
+      tooltip.innerHTML = `
+        <strong>#${pr.number} · ${escapeText(pr.title)}</strong>
+        <div>${escapeText(pr.author)} · ${escapeText(pr.state)} · Score ${pr.score}/20</div>
+        <div>Created: ${formatDate(pr.createdAt)}</div>
+        <div>Effective size: ${pr.effectiveFiles} files · ${pr.effectiveChurn} changed lines</div>
+        <div>Raw size: ${pr.rawFiles} files · ${pr.rawChurn} changed lines</div>
+        <div>Effective areas: ${escapeText(pr.areas.join(", ") || "none")}</div>
+        <ul>${pr.violations.map((item) => `<li>${escapeText(item)}</li>`).join("")}</ul>
+      `;
+      tooltip.classList.add("visible");
+      moveTooltip(event);
+    }
+    function hideTooltip() {
+      tooltip.classList.remove("visible");
+    }
+
+    const days = Math.max(1, Math.round((end - start) / 86400000));
+    for (let day = 0; day <= days; day++) {
+      const tick = document.createElement("div");
+      tick.className = "tick";
+      tick.style.left = `${(day / (days + 1)) * 100}%`;
+      tick.textContent = new Intl.DateTimeFormat("en-GB", {
+        day: "2-digit", month: "2-digit", timeZone: "UTC"
+      }).format(new Date(start + day * 86400000));
+      axis.appendChild(tick);
+    }
+    prs.forEach((pr, index) => {
+      const bar = document.createElement("a");
+      bar.className = `bar ${severity(pr.score)}`;
+      bar.href = pr.url;
+      bar.target = "_blank";
+      bar.rel = "noreferrer";
+      bar.style.left = `calc(${pct(pr.createdAt)}% - 4px)`;
+      bar.style.height = `${Math.max(8, (pr.score / 20) * 440)}px`;
+      bar.style.opacity = String(.72 + Math.min(.25, (index % 5) * .04));
+      bar.addEventListener("mouseenter", (event) => showTooltip(pr, event));
+      bar.addEventListener("mousemove", moveTooltip);
+      bar.addEventListener("mouseleave", hideTooltip);
+      bar.addEventListener("focus", (event) => showTooltip(pr, event));
+      bar.addEventListener("blur", hideTooltip);
+      bars.appendChild(bar);
+    });
+    const counts = prs.reduce((acc, pr) => {
+      acc.total += 1;
+      acc[pr.size] = (acc[pr.size] || 0) + 1;
+      if (pr.score >= 15) acc.critical += 1;
+      return acc;
+    }, { total: 0, small: 0, medium: 0, large: 0, huge: 0, critical: 0 });
+    document.getElementById("summary").innerHTML = [
+      ["Risky PRs", counts.total],
+      ["Small", counts.small],
+      ["Medium", counts.medium],
+      ["Large", counts.large],
+      ["Huge", counts.huge],
+      ["Critical bars", counts.critical],
+    ].map(([label, value]) => `<div class="metric"><b>${value}</b><span>${label}</span></div>`).join("");
+  </script>
+</body>
+</html>
